@@ -1,0 +1,4 @@
+name = DBLIB Sql Server driver
+description = DBLIB Driver for SQL Server and SQL Azure.
+core = 7.x
+package = Database engines
