@@ -56,6 +56,10 @@ class DatabaseConnection_dblib extends DatabaseConnection {
       'dbname=' . $connection_options['database'],
     );
 
+    if (!empty($connection_options['charset'])) {
+      $options[] = 'charset=' . $connection_options['charset'];
+    }
+
     // Launch the connection to the server.
     parent::__construct('dblib:' . implode(';', $options), $connection_options['username'], $connection_options['password'], array(
       // We run the statements in "direct mode" because the way PDO prepares
@@ -131,7 +135,7 @@ class DatabaseConnection_dblib extends DatabaseConnection {
    * NOTE: removed 'escape' from the list, because it explodes
    * with LIKE xxx ESCAPE yyy syntax.
    */
-  const RESERVED_REGEXP = '/\G 
+  const RESERVED_REGEXP = '/\G
     # Everything that follows a boundary that is not : or _.
     \b(?<![:\[_])(?:
       # Any reserved words, followed by a boundary that is not an opening parenthesis.
@@ -151,7 +155,7 @@ class DatabaseConnection_dblib extends DatabaseConnection {
       "  [^\\\\"] * (?: \\\\. [^\\\\"] *) * "
       |
       \' [^\\\\\']* (?: \\\\. [^\\\\\']*) * \'
-    ) 
+    )
   /Six';
 
   protected function replaceReservedCallback($matches) {
@@ -322,18 +326,18 @@ class DatabaseConnection_dblib extends DatabaseConnection {
   public function addRangeToQuery($query, $from, $count) {
     if ($from == 0) {
       // Easy case: just use a TOP query if we don't have to skip any rows.
-      $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . $count . ')', $query); 
+      $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . $count . ')', $query);
     }
     else {
       // More complex case: use a TOP query to retrieve $from + $count rows, and
       // filter out the first $from rows using a window function.
-      $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . ($from + $count) . ') ', $query);  
+      $query = preg_replace('/^\s*SELECT(\s*DISTINCT)?/Dsi', 'SELECT$1 TOP(' . ($from + $count) . ') ', $query);
       $query = '
         SELECT * FROM (
           SELECT sub2.*, ROW_NUMBER() OVER(ORDER BY sub2.__line2) AS __line3 FROM (
             SELECT 1 AS __line2, sub1.* FROM (' . $query . ') AS sub1
           ) as sub2
-        ) AS sub3 
+        ) AS sub3
         WHERE __line3 BETWEEN ' . ($from + 1) . ' AND ' . ($from + $count);
     }
 
