@@ -120,13 +120,18 @@ class Connection extends DatabaseConnection {
   public static function open(array &$connection_options = array()) {
     
     // Build the DSN.
-    $options = array();
-    $options['Server'] = $connection_options['host'] . (!empty($connection_options['port']) ? ',' . $connection_options['port'] : '');
+    $options = array(
+      'host' => $connection_options['host'] . (!empty($connection_options['port']) ? ':' . $connection_options['port'] : ''),
+    );
     // We might not have a database in the
     // connection options, for example, during
     // database creation in Install.
     if (!empty($connection_options['database'])) {
-      $options['Database'] = $connection_options['database'];
+      $options['dbname'] = $connection_options['database'];
+    }
+
+    if (!empty($connection_options['charset'])) {
+      $options['charset'] = $connection_options['charset'];
     }
 
     // Set isolation level if specified.
@@ -142,10 +147,10 @@ class Connection extends DatabaseConnection {
 
     // PDO Options are set at a connection level.
     // and apply to all statements.
-    $connection_options['pdo'] = array();
-
-    // Set proper error mode for all statements
-    $connection_options['pdo'][PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
+    $connection_options['pdo'] = array(
+      // Set proper error mode for all statements
+      \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+    );
 
     // Set a Statement class, unless the driver opted out.
     // $connection_options['pdo'][PDO::ATTR_STATEMENT_CLASS] = array(Statement::class, array(Statement::class));
