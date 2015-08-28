@@ -251,9 +251,9 @@ class Select extends QuerySelect {
     }
 
     // WHERE
-    if (count($this->where)) {
+    if (count($this->condition)) {
       // There is an implicit string cast on $this->condition.
-      $query .= "\nWHERE ( " . $this->where . " )";
+      $query .= "\nWHERE ( " . $this->condition . " )";
     }
 
     // GROUP BY
