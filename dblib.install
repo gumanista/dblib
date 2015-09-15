@@ -32,6 +32,7 @@ function dblib_REData(ReflectionExtension $re) {
  * @status: Needs global revision.
  */
 function dblib_requirements($phase) {
+  return array();
   $requirements = array();
 
   if ($phase == 'runtime') {
