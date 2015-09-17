@@ -11,7 +11,7 @@ use Drupal\Core\Database\Database;
 use Drupal\Core\Database\Query\Update as QueryUpdate;
 use Drupal\Core\Database\Query\Condition;
 
-use Drupal\Driver\Database\sqlsrv\Utils as DatabaseUtils;
+use Drupal\dblib\Driver\Utils as DatabaseUtils;
 
 use Drupal\dblib\Driver\TransactionIsolationLevel as DatabaseTransactionIsolationLevel;
 use Drupal\dblib\Driver\TransactionScopeOption as DatabaseTransactionScopeOption;
