@@ -71,9 +71,14 @@ class Statement extends DatabaseStatement implements StatementInterface {
     for ($i = 0; $i < $this->columnCount(); $i++) {
       $meta = $this->getColumnMeta($i);
       $this->columnNames[]= $meta['name'];
-      $sqlsrv_type = $meta['dblib:decl_type'];
-      $parts = explode(' ', $sqlsrv_type);
-      $type = reset($parts);
+      if (isset($meta['dblib:decl_type'])) {
+        $sqlsrv_type = $meta['dblib:decl_type'];
+        $parts = explode(' ', $sqlsrv_type);
+        $type = reset($parts);
+      }
+      else {
+        $type = $meta['native_type'];
+      }
       switch($type) {
         case 'varbinary':
           $null[$i] = NULL;
