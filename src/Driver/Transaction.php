@@ -1,26 +1,16 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\dblib\Driver\Transaction.
- */
-
 namespace Drupal\dblib\Driver;
 
+use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Transaction as DatabaseTransaction;
-use Drupal\Core\Database\Connection as DatabaseConnection;
-use Drupal\Core\Database\TransactionCommitFailedException as DatabaseTransactionCommitFailedException;
-use Drupal\Core\Database\TransactionExplicitCommitNotAllowedException as DatabaseTransactionExplicitCommitNotAllowedException;
+use Drupal\Core\Database\TransactionExplicitCommitNotAllowedException;
 
-use Drupal\dblib\Driver\TransactionIsolationLevel as DatabaseTransactionIsolationLevel;
-use Drupal\dblib\Driver\TransactionScopeOption as DatabaseTransactionScopeOption;
-use Drupal\dblib\Driver\TransactionSettings as DatabaseTransactionSettings;
+/**
+ * MSSQL implementation of \Drupal\Core\Database\Transaction.
+ */
+class Transaction extends DatabaseTransaction {
 
-use PDO as PDO;
-use Exception as Exception;
-use PDOStatement as PDOStatement;
-
-class Transaction extends DatabaseTransaction { 
   /**
    * A boolean value to indicate whether this transaction has been commited.
    *
@@ -30,19 +20,18 @@ class Transaction extends DatabaseTransaction {
 
   /**
    * A boolean to indicate if the transaction scope should behave sanely.
-   * 
-   * @var DatabaseTransactionSettings
+   *
+   * @var \Drupal\dblib\Driver\TransactionSettings
    */
   protected $settings = FALSE;
 
   /**
-   * Overriden to add settings.
+   * {@inheritdoc}
    *
-   * @param DatabaseConnection $connection 
-   * @param mixed $name 
-   * @param mixed $sane 
+   * @param \Drupal\dblib\Driver\TransactionSettings $settings
+   *   Additional settings.
    */
-  public function __construct(DatabaseConnection $connection, $name = NULL, $settings = NULL) {
+  public function __construct(Connection $connection, $name = NULL, $settings = NULL) {
     $this->settings = $settings;
     $this->connection = $connection;
     // If there is no transaction depth, then no transaction has started. Name
@@ -62,7 +51,7 @@ class Transaction extends DatabaseTransaction {
   }
 
   /**
-   * Overriden __desctur to provide some mental health.
+   * {@inheritdoc}
    */
   public function __destruct() {
     if (!$this->settings->Get_Sane()) {
@@ -83,19 +72,20 @@ class Transaction extends DatabaseTransaction {
 
   /**
    * The "sane" behaviour requires explicit commits.
-   * 
-   * @throws DatabaseTransactionExplicitCommitNotAllowedException 
+   *
+   * @throws \Drupal\Core\Database\TransactionExplicitCommitNotAllowedException
    */
   public function commit() {
     if (!$this->settings->Get_Sane()) {
-      throw new DatabaseTransactionExplicitCommitNotAllowedException();
+      throw new TransactionExplicitCommitNotAllowedException();
     }
     // Cannot commit a rolledback transaction...
     if ($this->rolledBack) {
-      throw new Exception('Cannot Commit after rollback.'); //DatabaseTransactionCannotCommitAfterRollbackException();
+      throw new \Exception('Cannot Commit after rollback.'); //DatabaseTransactionCannotCommitAfterRollbackException();
     }
     // Mark as commited, and commit!
     $this->commited = TRUE;
     $this->connection->popTransaction($this->name);
   }
+
 }

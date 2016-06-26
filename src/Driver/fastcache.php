@@ -1,11 +1,6 @@
 <?php
 
-/**
- * @file
- * fastcache class.
- */
-
-include_once 'fastcacheitem.inc';
+namespace Drupal\dblib\Driver;
 
 /**
  * Static caching layer.
@@ -21,14 +16,16 @@ include_once 'fastcacheitem.inc';
  * the request is over.
  */
 class fastcache {
-  
+
   // @var fastcacheitem[]  $fastcacheitems
-  private static $fastcacheitems = array();
+  private static $fastcacheitems = [];
+
   // @var bool $enabled
   private static $enabled = NULL;
+
   // @var bool $shutdown_registered
   private static $shutdown_registered = FALSE;
-  
+
   /**
    * Test info is loaded at database bootstrap phase
    * but this cache can be used earlier. Make sure
@@ -38,12 +35,12 @@ class fastcache {
    * @var string
    */
   private static $test_run_id;
-  
+
   /**
    * Add test prefix to current binary key, and account for atomic
    * items where $bin = NULL;
    *
-   * @param string $prefix 
+   * @param string $prefix
    */
   private static function FixKeyAndBin(&$cid, &$bin) {
     // We always need a binary, if non is specified, this item
@@ -71,11 +68,11 @@ class fastcache {
 
     $bin = static::$test_run_id . $bin;
   }
-  
+
   /**
    * Tell if cache persistence is enabled. If not, this cache
    * will behave as DRUPAL_STATIC until the end of request.
-   * 
+   *
    * Only enable this cache if the backend is DrupalWinCache
    * and the lock implementation is DrupalWinCache
    */
@@ -142,7 +139,7 @@ class fastcache {
       }
       // Register shutdown persistence once, only if enabled!
       if (static::$shutdown_registered == FALSE && static::Enabled()) {
-        register_shutdown_function(array('fastcache','fastcache_persist'));
+        register_shutdown_function(['fastcache', 'fastcache_persist']);
         static::$shutdown_registered = TRUE;
       }
     }
@@ -186,10 +183,9 @@ class fastcache {
   }
 
   /**
-   * Called on shutdown, persists the cache
-   * if necessary.
+   * Called on shutdown, persists the cache if necessary.
    */
-  public static function fastcache_persist () {
+  public static function fastcache_persist() {
     foreach (static::$fastcacheitems as $cache) {
       if ($cache->persist == TRUE) {
         cache_set($cache->bin, $cache->rawdata(), 'fastcache', CACHE_TEMPORARY);
@@ -199,4 +195,5 @@ class fastcache {
       }
     }
   }
+
 }

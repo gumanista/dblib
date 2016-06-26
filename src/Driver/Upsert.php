@@ -1,24 +1,14 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\Core\Database\Driver\dblib\Upsert.
- */
-
 namespace Drupal\dblib\Driver;
 
 use Drupal\Core\Database\Query\Upsert as QueryUpsert;
 
-use Drupal\dblib\Driver\TransactionIsolationLevel as DatabaseTransactionIsolationLevel;
-use Drupal\dblib\Driver\TransactionScopeOption as DatabaseTransactionScopeOption;
-use Drupal\dblib\Driver\TransactionSettings as DatabaseTransactionSettings;
-
-use Drupal\Driver\Database\sqlsrv\Utils as DatabaseUtils;
-
 /**
- * Implements the Upsert query for the MSSQL database driver. 
- * 
- * TODO: This class has been replaced by UpsertNative. Keeping this here for a while though..
+ * Implements the Upsert query for the MSSQL database driver.
+ *
+ * TODO: This class has been replaced by UpsertNative. Keeping this here for a
+ * while though..
  */
 class Upsert extends QueryUpsert {
 
@@ -31,25 +21,27 @@ class Upsert extends QueryUpsert {
     }
 
     // Default options for upsert queries.
-    $this->queryOptions += array(
+    $this->queryOptions += [
       'throw_exception' => TRUE,
-    );
+    ];
 
     // Default fields are always placed first for consistency.
     $insert_fields = array_merge($this->defaultFields, $this->insertFields);
-    $insert_fields_escaped = array_map(function($f) { return $this->connection->escapeField($f); }, $insert_fields);
+    $insert_fields_escaped = array_map(function ($f) {
+      return $this->connection->escapeField($f);
+    }, $insert_fields);
 
     $table = $this->connection->escapeTable($this->table);
     $unique_key = $this->connection->escapeField($this->key);
 
     // We have to execute multiple queries, therefore we wrap everything in a
     // transaction so that it is atomic where possible.
-    $transaction = $this->connection->startTransaction(NULL, DatabaseTransactionSettings::GetDDLCompatibleDefaults());
+    $transaction = $this->connection->startTransaction(NULL, TransactionSettings::GetDDLCompatibleDefaults());
 
     // First, create a temporary table with the same schema as the table we
     // are trying to upsert in.
     $query = 'SELECT TOP(0) * FROM {' . $table . '}';
-    $temp_table = $this->connection->queryTemporary($query, [], array_merge($this->queryOptions, array('real_table' => TRUE)));
+    $temp_table = $this->connection->queryTemporary($query, [], array_merge($this->queryOptions, ['real_table' => TRUE]));
 
     // Second, insert the data in the temporary table.
     $insert = $this->connection->insert($temp_table, $this->queryOptions)
@@ -103,7 +95,7 @@ class Upsert extends QueryUpsert {
     $transaction->commit();
 
     // Re-initialize the values array so that we can re-use this query.
-    $this->insertValues = array();
+    $this->insertValues = [];
 
     return TRUE;
   }

@@ -1,22 +1,21 @@
 <?php
 
-/**
- * @file
- * Contains Drupal\Core\Database\Driver\mysql\EntityQuery\Condition
- */
+namespace Drupal\dblib\Driver\EntityQuery\dblib;
 
-namespace Drupal\Driver\Database\sqlsrv\EntityQuery;
-
-use Drupal\Core\Database\EntityQuery\ConditionInterface as EntityQueryConditionInterface;
+use Drupal\Core\Entity\Query\Sql\Condition as BaseCondition;
 
 /**
- * Implements entity query conditions for SQL databases.
+ * Implements entity query conditions for MSSQL databases.
+ *
+ * @see \Drupal\Core\Entity\Query\Sql\pgsql\Condition
  */
-class Condition implements EntityQueryConditionInterface {
+class Condition extends BaseCondition {
 
   /**
    * {@inheritdoc}
    */
-  public static function translateCondition(array &$condition, $case_sensitive) { }
+  public static function translateCondition(array &$condition, $case_sensitive) {
+    // @todo Implement and find proper namespace.
+  }
 
 }

@@ -1,18 +1,11 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\dblib\Driver\Select.
- */
-
 namespace Drupal\dblib\Driver;
 
-use Drupal\Core\Database\Connection as DatabaseConnection;
-
-use Drupal\Core\Database\Query\PlaceholderInterface as DatabasePlaceholderInterface;
-use Drupal\Core\Database\Query\SelectInterface as DatabaseSelectInterface;
+use Drupal\Core\Database\Connection;
+use Drupal\Core\Database\Query\Condition;
+use Drupal\Core\Database\Query\PlaceholderInterface;
 use Drupal\Core\Database\Query\Select as QuerySelect;
-use Drupal\Core\Database\Query\Condition as DatabaseCondition;
 use Drupal\Core\Database\Query\SelectInterface;
 
 /**
@@ -20,40 +13,25 @@ use Drupal\Core\Database\Query\SelectInterface;
  * @{
  */
 
+/**
+ * MSSQL implementation of \Drupal\Core\Database\Query\Select.
+ */
 class Select extends QuerySelect {
 
   /**
-   * Overriden with an aditional exclude parameter that tells not to include this expression (by default)
-   * in the select list.
-   *
-   * @param string $expression 
-   *
-   * @param string $alias 
-   *
-   * @param string $arguments 
-   *
-   * @param string $exclude
-   *   If set to TRUE, this expression will not be added to the select list. Useful
-   *   when you want to reuse expressions in the WHERE part.
-   * @param string $expand
-   *   If this expression will be expanded as a CROSS_JOIN so it can be consumed
-   *   from other parts of the query. TRUE by default. It attempts to detect expressions
-   *   that cannot be cross joined (aggregates).
-   * @return string
+   * {@inheritdoc}
    */
-  public function addExpression($expression, $alias = NULL, $arguments = array(), $exclude = FALSE, $expand = TRUE) {
+  public function addExpression($expression, $alias = NULL, $arguments = [], $exclude = FALSE, $expand = TRUE) {
     $alias = parent::addExpression($expression, $alias, $arguments);
     $this->expressions[$alias]['exclude'] = $exclude;
     $this->expressions[$alias]['expand'] = $expand;
     return $alias;
   }
+
   /**
-   * Override for SelectQuery::preExecute().
-   *
-   * Ensure that all the fields in ORDER BY and GROUP BY are part of the
-   * main query.
+   * {@inheritdoc}
    */
-  public function preExecute(DatabaseSelectInterface $query = NULL) {
+  public function preExecute(SelectInterface $query = NULL) {
     // If no query object is passed in, use $this.
     if (!isset($query)) {
       $query = $this;
@@ -75,7 +53,7 @@ class Select extends QuerySelect {
       $counter = 0;
       foreach ($columns as $field => $dummy) {
         $found = FALSE;
-        foreach($this->fields as $f) {
+        foreach ($this->fields as $f) {
           if (!isset($f['table']) || !isset($f['field'])) {
             continue;
           }
@@ -87,11 +65,11 @@ class Select extends QuerySelect {
         }
         if (!isset($this->fields[$field]) && !isset($this->expressions[$field]) && !$found) {
           $alias = '_field_' . ($counter++);
-          $this->addExpression($field, $alias, array(), FALSE, FALSE);
+          $this->addExpression($field, $alias, [], FALSE, FALSE);
           $this->queryOptions['sqlsrv_drop_columns'][] = $alias;
         }
       }
-      
+
       // The other way round is also true, if using aggregates, all the fields in the SELECT
       // must be present in the GROUP BY.
       if (!empty($this->group)) {
@@ -113,13 +91,15 @@ class Select extends QuerySelect {
           $group_field = (isset($field['table']) ? $this->connection->escapeTable($field['table']) . '.' : '') . $this->connection->escapeField($field['field']);
         }
         // Expand an alias on an expression.
-        else if (isset($this->expressions[$group_field])) {
-          $expression = $this->expressions[$group_field];
-          $group_field = $expression['expression'];
-          // If the expression has arguments, we now
-          // have duplicate placeholders. Run as insecure.
-          if (is_array($expression['arguments'])) {
-            $this->queryOptions['insecure'] = TRUE;
+        else {
+          if (isset($this->expressions[$group_field])) {
+            $expression = $this->expressions[$group_field];
+            $group_field = $expression['expression'];
+            // If the expression has arguments, we now
+            // have duplicate placeholders. Run as insecure.
+            if (is_array($expression['arguments'])) {
+              $this->queryOptions['insecure'] = TRUE;
+            }
           }
         }
       }
@@ -129,11 +109,9 @@ class Select extends QuerySelect {
   }
 
   /**
-   * Override for SelectQuery::compile().
-   *
-   * Detect when this query is prepared for use in a sub-query.
+   * {@inheritdoc}
    */
-  public function compile(DatabaseConnection $connection, DatabasePlaceholderInterface $queryPlaceholder) {
+  public function compile(Connection $connection, PlaceholderInterface $queryPlaceholder) {
     $this->inSubQuery = $queryPlaceholder != $this;
     return parent::compile($connection, $queryPlaceholder);
   }
@@ -142,11 +120,11 @@ class Select extends QuerySelect {
    * note the stupid argument order (to match strpos)
    */
   private function stripos_arr($haystack, $needle) {
-    if(!is_array($needle)) {
-      $needle = array($needle);
+    if (!is_array($needle)) {
+      $needle = [$needle];
     }
-    foreach($needle as $what) {
-      if(($pos = stripos($haystack, $what)) !== false) { 
+    foreach ($needle as $what) {
+      if (($pos = stripos($haystack, $what)) !== FALSE) {
         return $pos;
       }
     }
@@ -188,6 +166,9 @@ class Select extends QuerySelect {
     return end($matches);
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function __toString() {
     // For convenience, we compile the query ourselves if the caller forgot
     // to do it. This allows constructs like "(string) $query" to work. When
@@ -207,7 +188,7 @@ class Select extends QuerySelect {
     }
 
     // FIELDS and EXPRESSIONS
-    $fields = array();
+    $fields = [];
     foreach ($this->tables as $alias => $table) {
       if (!empty($table['all_fields'])) {
         $fields[] = $this->connection->escapeTable($alias) . '.*';
@@ -244,7 +225,7 @@ class Select extends QuerySelect {
 
       // Don't use the AS keyword for table aliases, as some
       // databases don't support it (e.g., Oracle).
-      $query .=  $table_string . ' ' . $this->connection->escapeTable($table['alias']);
+      $query .= $table_string . ' ' . $this->connection->escapeTable($table['alias']);
 
       if (!empty($table['condition'])) {
         $query .= ' ON ' . $table['condition'];
@@ -274,7 +255,7 @@ class Select extends QuerySelect {
     // is also specified.
     if ($this->order && (empty($this->inSubQuery) || !empty($this->range))) {
       $query .= "\nORDER BY ";
-      $fields = array();
+      $fields = [];
       foreach ($this->order as $field => $direction) {
         $fields[] = $field . ' ' . $direction;
       }
@@ -298,7 +279,7 @@ class Select extends QuerySelect {
   }
 
   /**
-   * Override of SelectQuery::orderRandom() for SQL Server.
+   * {@inheritdoc}
    *
    * It seems that sorting by RAND() doesn't actually work, this is a less then
    * elegant workaround.
@@ -310,13 +291,13 @@ class Select extends QuerySelect {
     $this->orderBy($alias);
     return $this;
   }
-  
-  private function GetUsedAliases(DatabaseCondition $condition, array &$aliases = array()) {
-    foreach($condition->conditions() as $key => $c) {
+
+  private function GetUsedAliases(Condition $condition, array &$aliases = []) {
+    foreach ($condition->conditions() as $key => $c) {
       if (is_string($key) && substr($key, 0, 1) == '#') {
         continue;
       }
-      if (is_a($c['field'], DatabaseCondition::class)) {
+      if (is_a($c['field'], Condition::class)) {
         $this->GetUsedAliases($c['field'], $aliases);
       }
       else {
@@ -324,10 +305,12 @@ class Select extends QuerySelect {
       }
     }
   }
-  
+
   /**
-   * This is like the default countQuery, but does not optimize field (or expressions)
-   * that are being used in conditions.
+   * {@inheritdoc}
+   *
+   * This is like the default countQuery, but does not optimize field (or
+   * expressions) that are being used in conditions.
    */
   public function countQuery() {
     // Create our new query object that we will mutate into a count query.
@@ -338,9 +321,9 @@ class Select extends QuerySelect {
 
     if (!$count->distinct && !isset($having[0])) {
 
-      $used_aliases = array();
+      $used_aliases = [];
       $this->GetUsedAliases($count->condition, $used_aliases);
-      
+
       // When not executing a distinct query, we can zero-out existing fields
       // and expressions that are not used by a GROUP BY or HAVING. Fields
       // listed in a GROUP BY or HAVING clause need to be present in the
@@ -373,7 +356,7 @@ class Select extends QuerySelect {
     // Ordering a count query is a waste of cycles, and breaks on some
     // databases anyway.
     $orders = &$count->getOrderBy();
-    $orders = array();
+    $orders = [];
 
     if ($count->distinct && !empty($group_by)) {
       // If the query is distinct and contains a GROUP BY, we need to remove the

@@ -1,28 +1,18 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\dblib\Driver\Update.
- */
-
 namespace Drupal\dblib\Driver;
 
-use Drupal\Core\Database\Database;
 use Drupal\Core\Database\Query\Update as QueryUpdate;
-use Drupal\Core\Database\Query\Condition;
-
 use Drupal\dblib\Driver\Utils as DatabaseUtils;
 
-use Drupal\dblib\Driver\TransactionIsolationLevel as DatabaseTransactionIsolationLevel;
-use Drupal\dblib\Driver\TransactionScopeOption as DatabaseTransactionScopeOption;
-use Drupal\dblib\Driver\TransactionSettings as DatabaseTransactionSettings;
-
-use PDO as PDO;
-use Exception as Exception;
-use PDOStatement as PDOStatement;
-
+/**
+ * MSSQL implementation of \Drupal\Core\Database\Query\Update.
+ */
 class Update extends QueryUpdate {
 
+  /**
+   * {@inheritdoc}
+   */
   public function execute() {
     // Fetch the list of blobs and sequences used on that table.
     $columnInformation = $this->connection->schema()->queryColumnInformation($this->table);
@@ -61,6 +51,9 @@ class Update extends QueryUpdate {
     return $stmt->rowCount();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function __toString() {
     // Create a sanitized comment string to prepend to the query.
     $prefix = $this->connection->makeComment($this->comments);

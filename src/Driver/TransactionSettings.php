@@ -1,14 +1,6 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\dblib\Driver\TransactionSettings.
- */
-
 namespace Drupal\dblib\Driver;
-
-use Drupal\dblib\Driver\TransactionIsolationLevel as DatabaseTransactionIsolationLevel;
-use Drupal\dblib\Driver\TransactionScopeOption as DatabaseTransactionScopeOption;
 
 use Drupal\Core\Database\Database;
 
@@ -19,28 +11,29 @@ class TransactionSettings {
 
   /**
    * Summary of __construct
-   * @param mixed $Sane 
-   * @param DatabaseTransactionScopeOption $ScopeOption 
-   * @param DatabaseTransactionIsolationLevel $IsolationLevel 
+   *
+   * @param mixed $Sane
+   * @param TransactionScopeOption $ScopeOption
+   * @param TransactionIsolationLevel $IsolationLevel
    */
-  public function __construct($Sane = FALSE, 
-      DatabaseTransactionScopeOption $ScopeOption = NULL, 
-      DatabaseTransactionIsolationLevel $IsolationLevel = NULL) {
+  public function __construct($Sane = FALSE,
+                              TransactionScopeOption $ScopeOption = NULL,
+                              TransactionIsolationLevel $IsolationLevel = NULL) {
     $this->_Sane = $Sane;
     if ($ScopeOption == NULL) {
-      $ScopeOption = DatabaseTransactionScopeOption::RequiresNew();
+      $ScopeOption = TransactionScopeOption::RequiresNew;
     }
     if ($IsolationLevel == NULL) {
-      $IsolationLevel = DatabaseTransactionIsolationLevel::Unspecified();
+      $IsolationLevel = TransactionIsolationLevel::Unspecified();
     }
     $this->_IsolationLevel = $IsolationLevel;
     $this->_ScopeOption = $ScopeOption;
   }
 
-  // @var DatabaseTransactionIsolationLevel
+  // @var TransactionIsolationLevel
   private $_IsolationLevel;
 
-  // @var DatabaseTransactionScopeOption
+  // @var TransactionScopeOption
   private $_ScopeOption;
 
   // @var Boolean
@@ -72,50 +65,51 @@ class TransactionSettings {
 
   /**
    * Returns a default setting system-wide.
-   * 
+   *
    * @return TransactionSettings
    */
   public static function GetDefaults() {
     // Use snapshot if available.
-    $isolation = DatabaseTransactionIsolationLevel::Ignore();
-    if ($info =  Database::getConnection()->schema()->getDatabaseInfo()) {
+    $isolation = TransactionIsolationLevel::Ignore;
+    if ($info = Database::getConnection()->schema()->getDatabaseInfo()) {
       if ($info->snapshot_isolation_state == TRUE) {
-        $isolation = DatabaseTransactionIsolationLevel::Snapshot();
+        $isolation = TransactionIsolationLevel::Snapshot;
       }
     }
     // Otherwise use Drupal's default behaviour (except for nesting!)
-    return new TransactionSettings(FALSE, 
-                DatabaseTransactionScopeOption::Required(), 
-                $isolation);
+    return new TransactionSettings(FALSE,
+      TransactionScopeOption::Required,
+      $isolation);
   }
 
   /**
    * Proposed better defaults.
-   * 
+   *
    * @return TransactionSettings
    */
   public static function GetBetterDefaults() {
     // Use snapshot if available.
-    $isolation = DatabaseTransactionIsolationLevel::Ignore();
+    $isolation = TransactionIsolationLevel::Ignore;
     if ($info = Database::getConnection()->schema()->getDatabaseInfo()) {
       if ($info->snapshot_isolation_state == TRUE) {
-        $isolation = DatabaseTransactionIsolationLevel::Snapshot();
+        $isolation = TransactionIsolationLevel::Snapshot;
       }
     }
     // Otherwise use Drupal's default behaviour (except for nesting!)
-    return new TransactionSettings(TRUE, 
-                DatabaseTransactionScopeOption::Required(), 
-                $isolation);
+    return new TransactionSettings(TRUE,
+      TransactionScopeOption::Required,
+      $isolation);
   }
 
   /**
    * Snapshot isolation is not compatible with DDL operations.
-   * 
+   *
    * @return TransactionSettings
    */
   public static function GetDDLCompatibleDefaults() {
-    return new TransactionSettings(TRUE, 
-                DatabaseTransactionScopeOption::Required(), 
-                DatabaseTransactionIsolationLevel::ReadCommitted());
+    return new TransactionSettings(TRUE,
+      TransactionScopeOption::Required,
+      TransactionIsolationLevel::ReadCommitted);
   }
+
 }

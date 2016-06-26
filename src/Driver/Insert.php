@@ -1,30 +1,17 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\dblib\Driver\Insert.
- */
-
 namespace Drupal\dblib\Driver;
 
-use Drupal\Core\Database\Database;
 use Drupal\Core\Database\Query\Insert as QueryInsert;
-
-use Drupal\dblib\Driver\Utils as DatabaseUtils;
-
-use Drupal\dblib\Driver\TransactionIsolationLevel as DatabaseTransactionIsolationLevel;
-use Drupal\dblib\Driver\TransactionScopeOption as DatabaseTransactionScopeOption;
 use Drupal\dblib\Driver\TransactionSettings as DatabaseTransactionSettings;
-
-use PDO as PDO;
+use Drupal\dblib\Driver\Utils as DatabaseUtils;
 use Exception as Exception;
-use PDOStatement as PDOStatement;
+use PDO as PDO;
 
 /**
  * @ingroup database
  * @{
  */
-
 class Insert extends QueryInsert {
 
   public function execute() {

@@ -1,18 +1,9 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\Core\Database\Driver\dblib\UpsertNative.
- */
-
 namespace Drupal\dblib\Driver;
 
 use Drupal\Core\Database\Query\Upsert as QueryUpsert;
-
-use Drupal\dblib\Driver\TransactionIsolationLevel as DatabaseTransactionIsolationLevel;
-use Drupal\dblib\Driver\TransactionScopeOption as DatabaseTransactionScopeOption;
-use Drupal\dblib\Driver\TransactionSettings as DatabaseTransactionSettings;
-
+use Drupal\Core\Database\SchemaObjectDoesNotExistException;
 use Drupal\dblib\Driver\Utils as DatabaseUtils;
 
 /**
@@ -22,6 +13,7 @@ class UpsertNative extends QueryUpsert {
 
   /**
    * Result summary of INSERTS/UPDATES after execution.
+   *
    * @var string[]
    */
   public $result = NULL;
@@ -32,17 +24,18 @@ class UpsertNative extends QueryUpsert {
   public function execute() {
 
     // Initialize result array.
-    $this->result = array();
+    $this->result = [];
 
     // Keep a reference to the blobs.
-    $blobs = array();
+    $blobs = [];
 
     // Fetch the list of blobs and sequences used on that table.
-    $columnInformation = $this->connection->schema()->queryColumnInformation($this->table);
+    $columnInformation = $this->connection->schema()
+      ->queryColumnInformation($this->table);
 
     // If the table does not exist, trigger an exception.
     if (empty($columnInformation)) {
-      throw new \Drupal\Core\Database\SchemaObjectDoesNotExistException();
+      throw new SchemaObjectDoesNotExistException();
     }
 
     // Find out if there is an identity field set in this insert.
@@ -50,7 +43,7 @@ class UpsertNative extends QueryUpsert {
 
     // Initialize placeholder count.
     $max_placeholder = 0;
-    
+
     // Build the query.
     $stmt = $this->connection->prepareQuery((string) $this);
 
@@ -70,16 +63,13 @@ class UpsertNative extends QueryUpsert {
     $this->insertValues = [];
 
     return TRUE;
-
   }
-
 
   /**
    * {@inheritdoc}
    */
   public function __toString() {
-
-    $query = array();
+    $query = [];
 
     // Enable direct insertion to identity columns if necessary.
     if (!empty($this->setIdentity)) {
@@ -93,23 +83,24 @@ class UpsertNative extends QueryUpsert {
     $values = $this->getInsertPlaceholderFragment($this->insertValues, $this->defaultFields);
     $columns = implode(', ', $this->connection->quoteIdentifiers($this->insertFields));
 
-    $dataset = "SELECT T.* FROM (values" . implode(',', $values) .") as T({$columns})";
+    $dataset = "SELECT T.* FROM (values" . implode(',', $values) . ") as T({$columns})";
 
     // Build primery key conditions
-    $key_conditions = array();
+    $key_conditions = [];
 
     // Fetch the list of blobs and sequences used on that table.
-    $columnInformation = $this->connection->schema()->queryColumnInformation($this->table);
+    $columnInformation = $this->connection->schema()
+      ->queryColumnInformation($this->table);
     $primary_key_cols = array_column($columnInformation['indexes'][$columnInformation['primary_key_index']]['columns'], 'name');
     foreach ($primary_key_cols as $key) {
       $key_conditions[] = "_target.[$key] = _source.[$key]";
     }
-    
+
     $query[] = "USING ({$dataset}) _source" . PHP_EOL . 'ON ' . implode(' AND ', $key_conditions);
 
     // Mappings.
-    $insert_mappings = array();
-    $update_mappings = array();
+    $insert_mappings = [];
+    $update_mappings = [];
     foreach ($this->insertFields as $field) {
       $insert_mappings[] = "_source.[{$field}]";
       // Updating the unique / primary key is not necessary.
@@ -122,13 +113,12 @@ class UpsertNative extends QueryUpsert {
     $query[] = 'WHEN MATCHED THEN UPDATE SET ' . implode(', ', $update_mappings);
 
     // "When not matched" part.
-    $query[] = "WHEN NOT MATCHED THEN INSERT ({$columns}) VALUES (".  implode(', ', $insert_mappings) .")";
+    $query[] = "WHEN NOT MATCHED THEN INSERT ({$columns}) VALUES (" . implode(', ', $insert_mappings) . ")";
 
     // Return information about the query.
     $query[] = 'OUTPUT $action;';
 
     return implode(PHP_EOL, $query);
-
   }
 
 }

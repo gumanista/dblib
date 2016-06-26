@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\dblib\Driver\Tasks.
- */
-
 namespace Drupal\dblib\Driver\Install;
 
 use Drupal\Core\Database\Database;
@@ -14,7 +9,7 @@ use Drupal\dblib\Driver\Connection;
 use Drupal\dblib\Driver\Schema;
 
 /**
- * Specifies installation tasks for PostgreSQL databases.
+ * Specifies installation tasks for MSSQL databases.
  */
 class Tasks extends InstallTasks {
 
@@ -27,18 +22,18 @@ class Tasks extends InstallTasks {
    * Constructs a \Drupal\dblib\Driver\Install\Tasks object.
    */
   public function __construct() {
-    $this->tasks[] = array(
+    $this->tasks[] = [
       'function' => 'checkEncoding',
-      'arguments' => array(),
-    );
-    $this->tasks[] = array(
+      'arguments' => [],
+    ];
+    $this->tasks[] = [
       'function' => 'initializeDatabase',
-      'arguments' => array(),
-    );    
-    $this->tasks[] = array(
+      'arguments' => [],
+    ];
+    $this->tasks[] = [
       'function' => 'enableModule',
-      'arguments' => array(),
-    );
+      'arguments' => [],
+    ];
   }
 
   /**
@@ -97,20 +92,26 @@ class Tasks extends InstallTasks {
         catch (DatabaseNotFoundException $e) {
           // Still no dice; probably a permission issue. Raise the error to the
           // installer.
-          $this->fail(t('Database %database not found. The server reports the following message when attempting to create the database: %error.', array('%database' => $database, '%error' => $e->getMessage())));
+          $this->fail(t('Database %database not found. The server reports the following message when attempting to create the database: %error.', [
+            '%database' => $database,
+            '%error' => $e->getMessage(),
+          ]));
           return FALSE;
         }
         catch (\PDOException $e) {
           // Still no dice; probably a permission issue. Raise the error to the
           // installer.
-          $this->fail(t('Database %database not found. The server reports the following message when attempting to create the database: %error.', array('%database' => $database, '%error' => $e->getMessage())));
+          $this->fail(t('Database %database not found. The server reports the following message when attempting to create the database: %error.', [
+            '%database' => $database,
+            '%error' => $e->getMessage(),
+          ]));
           return FALSE;
         }
       }
       else {
         // Database connection failed for some other reason than the database
         // not existing.
-        $this->fail(t('Failed to connect to your database server. The server reports the following message: %error.<ul><li>Is the database server running?</li><li>Does the database exist, and have you entered the correct database name?</li><li>Have you entered the correct username and password?</li><li>Have you entered the correct database hostname?</li></ul>', array('%error' => $e->getMessage())));
+        $this->fail(t('Failed to connect to your database server. The server reports the following message: %error.<ul><li>Is the database server running?</li><li>Does the database exist, and have you entered the correct database name?</li><li>Have you entered the correct username and password?</li><li>Have you entered the correct database hostname?</li></ul>', ['%error' => $e->getMessage()]));
         return FALSE;
       }
     }
@@ -129,11 +130,11 @@ class Tasks extends InstallTasks {
         $this->pass(t('Database is encoded in case insensitive collation: $collation'));
       }
       else {
-        $this->fail(t('The %driver database must use case insensitive encoding (recomended %encoding) to work with Drupal. Recreate the database with %encoding encoding. See !link for more details.', array(
+        $this->fail(t('The %driver database must use case insensitive encoding (recomended %encoding) to work with Drupal. Recreate the database with %encoding encoding. See %readme for more details.', [
           '%encoding' => Schema::DEFAULT_COLLATION_CI,
           '%driver' => $this->name(),
-          '!link' => '<a href="INSTALL.dblib.txt">INSTALL.dblib.txt</a>'
-        )));
+          '%readme' => 'README.txt',
+        ]));
       }
     }
     catch (\Exception $e) {
@@ -241,7 +242,7 @@ EOF
             END
 EOF
       );
-      
+
       // MD5(@value) function.
       $if_exists = $schema->functionExists('MD5') ? 'ALTER' : 'CREATE';
       $database->query(<<< EOF
@@ -251,7 +252,7 @@ EOF
             END
 EOF
       );
-      
+
       // LPAD(@str, @len, @padstr) function.
       $if_exists = $schema->functionExists('LPAD') ? 'ALTER' : 'CREATE';
       $database->query(<<< EOF
@@ -261,7 +262,7 @@ EOF
             END
 EOF
       );
-      
+
       // CONNECTION_ID() function.
       $if_exists = $schema->functionExists('CONNECTION_ID') ? 'ALTER' : 'CREATE';
       $database->query(<<< EOF
@@ -282,7 +283,7 @@ EOF
       $this->fail(t('Drupal could not be correctly setup with the existing database. Revise any errors.'));
     }
   }
-  
+
   /**
    * Enable the SQL Server module.
    */
@@ -307,4 +308,5 @@ EOF
     $form['username']['#description'] = t('Leave username (and password) blank to use Windows authentication.');
     return $form;
   }
+
 }

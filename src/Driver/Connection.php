@@ -1,48 +1,26 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\dblib\Driver\Connection.
- */
-
 namespace Drupal\dblib\Driver;
 
-use Drupal\Core\Database\Database;
-use Drupal\Core\Database\StatementInterface;
-use Drupal\Core\Database\IntegrityConstraintViolationException;
-use Drupal\Core\Database\DatabaseExceptionWrapper;
-use Drupal\Core\Database\DatabaseException;
-use Drupal\Core\Database\DatabaseNotFoundException;
-
 use Drupal\Core\Database\Connection as DatabaseConnection;
-
-use Drupal\Core\Database\TransactionNoActiveException as DatabaseTransactionNoActiveException;
-use Drupal\Core\Database\TransactionCommitFailedException as DatabaseTransactionCommitFailedException;
-use Drupal\Core\Database\TransactionOutOfOrderException as DatabaseTransactionOutOfOrderException;
-use Drupal\Core\Database\TransactionException as DatabaseTransactionException;
-use Drupal\Core\Database\TransactionNameNonUniqueException as DatabaseTransactionNameNonUniqueException;
-
-use Drupal\dblib\Driver\TransactionIsolationLevel as DatabaseTransactionIsolationLevel;
-use Drupal\dblib\Driver\TransactionScopeOption as DatabaseTransactionScopeOption;
-use Drupal\dblib\Driver\TransactionSettings as DatabaseTransactionSettings;
-use Drupal\dblib\Driver\Context as DatabaseContext;
-
+use Drupal\Core\Database\Database;
+use Drupal\Core\Database\DatabaseException;
+use Drupal\Core\Database\DatabaseExceptionWrapper;
+use Drupal\Core\Database\DatabaseNotFoundException;
+use Drupal\Core\Database\IntegrityConstraintViolationException;
+use Drupal\Core\Database\StatementInterface;
+use Drupal\Core\Database\TransactionCommitFailedException;
+use Drupal\Core\Database\TransactionNameNonUniqueException;
+use Drupal\Core\Database\TransactionNoActiveException;
+use Drupal\Core\Database\TransactionOutOfOrderException;
 use Drupal\dblib\Driver\Utils as DatabaseUtils;
 
-use PDO as PDO;
-use PDOException as PDOException;
-use fastcache as fastcache;
-use Exception as Exception;
-
-include_once 'fastcache.inc';
-
 /**
- * @addtogroup database
- * @{
+ * MSSQL implementation of \Drupal\Core\Database\Connection.
  *
- * Temporary tables: temporary table support is done by means of global temporary tables (#)
- * to avoid the use of DIRECT QUERIES. You can enable and disable the use of direct queries
- * with $conn->directQuery = TRUE|FALSE.
+ * Temporary tables: temporary table support is done by means of global
+ * temporary tables (#) to avoid the use of DIRECT QUERIES. You can enable and
+ * disable the use of direct queries with $conn->directQuery = TRUE|FALSE.
  * http://blogs.msdn.com/b/brian_swan/archive/2010/06/15/ctp2-of-microsoft-driver-for-php-for-sql-server-released.aspx
  *
  */
@@ -50,15 +28,15 @@ class Connection extends DatabaseConnection {
 
   // Do not preprocess the query before execution.
   public $bypassQueryPreprocess = FALSE;
-  
+
   // Prepare statements with SQLSRV_ATTR_DIRECT_QUERY = TRUE.
   public $directQuery = FALSE;
 
   // Wether to have or not statement caching.
   public $statementCaching = FALSE;
-  
+
   /**
-   * Override of DatabaseConnection::driver().
+   * {@inheritdoc}
    *
    * @status tested
    */
@@ -67,14 +45,14 @@ class Connection extends DatabaseConnection {
   }
 
   /**
-   * Override of DatabaseConnection::databaseType().
+   * {@inheritdoc}
    *
    * @status tested
    */
   public function databaseType() {
     return 'dblib';
   }
-  
+
   /**
    * Error code for Login Failed, usually happens when
    * the database does not exist.
@@ -90,24 +68,24 @@ class Connection extends DatabaseConnection {
   }
 
   /**
-   * Constructs a Connection object.
+   * {@inheritdoc}
    */
   public function __construct(\PDO $connection, array $connection_options) {
     // Needs to happen before parent construct.
     $this->statementClass = Statement::class;
-    
-    parent::__construct($connection, $connection_options);  
-    
+
+    parent::__construct($connection, $connection_options);
+
     // This driver defaults to transaction support, except if explicitly passed FALSE.
     $this->transactionSupport = !isset($connection_options['transactions']) || $connection_options['transactions'] !== FALSE;
     $this->transactionalDDLSupport = $this->transactionSupport;
 
     // Store connection options for future reference.
     $this->connectionOptions = &$connection_options;
-    
+
     // Fetch the name of the user-bound schema. It is the schema that SQL Server
     // will use for non-qualified tables.
-    $this->schema()->defaultSchema = $this->schema()->GetDefaultSchema();
+    //$this->schema()->defaultSchema = $this->schema()->GetDefaultSchema();
 
     // Set default direct query behaviour
     $this->directQuery = TRUE;//DatabaseUtils::GetConfigBoolean('MSSQL_DEFAULT_DIRECTQUERY');
@@ -117,10 +95,10 @@ class Connection extends DatabaseConnection {
   /**
    * {@inheritdoc}
    */
-  public static function open(array &$connection_options = array()) {
-    
+  public static function open(array &$connection_options = []) {
+
     // Build the DSN.
-    $options = array();
+    $options = [];
     $options['host'] = $connection_options['host'] . (!empty($connection_options['port']) ? ':' . $connection_options['port'] : '');
     // We might not have a database in the
     // connection options, for example, during
@@ -144,46 +122,46 @@ class Connection extends DatabaseConnection {
 
     // PDO Options are set at a connection level.
     // and apply to all statements.
-    $connection_options['pdo'] = array();
+    $connection_options['pdo'] = [];
 
     // Set proper error mode for all statements
-    $connection_options['pdo'][PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
+    $connection_options['pdo'][\PDO::ATTR_ERRMODE] = \PDO::ERRMODE_EXCEPTION;
 
     // Set a Statement class, unless the driver opted out.
-    // $connection_options['pdo'][PDO::ATTR_STATEMENT_CLASS] = array(Statement::class, array(Statement::class));
+    // $connection_options['pdo'][\PDO::ATTR_STATEMENT_CLASS] = array(Statement::class, array(Statement::class));
 
     // Actually instantiate the PDO.
     $pdo = new \PDO($dsn, $connection_options['username'], $connection_options['password'], $connection_options['pdo']);
-    
+
     return $pdo;
   }
 
   /**
-   * Prepared PDO statements only makes sense if we cache them... 
-   *  
+   * Prepared PDO statements only makes sense if we cache them...
+   *
    * @var mixed
    */
-  private $statement_cache = array();
+  private $statement_cache = [];
 
   /**
-   * Temporary override of DatabaseConnection::prepareQuery().
+   * {@inheritdoc}
    *
    * @todo: remove that when DatabaseConnection::prepareQuery() is fixed to call
    *   $this->prepare() and not parent::prepare().
    *   https://www.drupal.org/node/2345451
    * @status: tested, temporary
    */
-  public function prepareQuery($query, array $options = array()) {
+  public function prepareQuery($query, array $options = []) {
 
     // Merge default statement options. These options are
     // only specific for this preparation and will only override
     // the global configuration if set to different than NULL.
-    $options = array_merge(array(
-        'insecure' => FALSE,
-        'statement_caching' => $this->statementCaching,
-        'direct_query' => $this->directQuery,
-        'prefix_tables' => TRUE,
-      ), $options);
+    $options = array_merge([
+      'insecure' => FALSE,
+      'statement_caching' => $this->statementCaching,
+      'direct_query' => $this->directQuery,
+      'prefix_tables' => TRUE,
+    ], $options);
 
     // Prefix tables. There is no global setting for this.
     if ($options['prefix_tables'] !== FALSE) {
@@ -198,9 +176,9 @@ class Connection extends DatabaseConnection {
     }
 
     #region PDO Options
-    
-    $pdo_options = array();
-    
+
+    $pdo_options = [];
+
     // Set insecure options if requested so.
     if ($options['insecure'] === TRUE) {
       // We have to log this, prepared statements are a security RISK.
@@ -222,20 +200,20 @@ class Connection extends DatabaseConnection {
       // FROM node
       // GROUP BY SUBSTRING(title, 1, :length2
       // This is only going to work in PDO 3 but doesn't hurt in PDO 2.
-      // The security of parameterized queries is not in effect when you use PDO::ATTR_EMULATE_PREPARES => true.
+      // The security of parameterized queries is not in effect when you use \PDO::ATTR_EMULATE_PREPARES => true.
       // Your application should ensure that the data that is bound to the parameter(s) does not contain malicious
       // Transact-SQL code.
       // Never use this when you need special column binding.
       // THIS ONLY WORKS IF SET AT THE STATEMENT LEVEL.
-      $pdo_options[PDO::ATTR_EMULATE_PREPARES] = TRUE;
+      $pdo_options[\PDO::ATTR_EMULATE_PREPARES] = TRUE;
     }
-    
+
     // It creates a cursor for the query, which allows you to iterate over the result set 
     // without fetching the whole result at once. A scrollable cursor, specifically, is one that allows 
     // iterating backwards.
     // https://msdn.microsoft.com/en-us/library/hh487158%28v=sql.105%29.aspx
-    $pdo_options[PDO::ATTR_CURSOR] = PDO::CURSOR_SCROLL;
-    
+    $pdo_options[\PDO::ATTR_CURSOR] = \PDO::CURSOR_SCROLL;
+
     #endregion
 
     // Call our overriden prepare.
@@ -248,7 +226,7 @@ class Connection extends DatabaseConnection {
 
     return $stmt;
   }
-  
+
   /**
    * Internal function: prepare a query by calling PDO directly.
    *
@@ -256,7 +234,7 @@ class Connection extends DatabaseConnection {
    * database layer, but do not call it directly, as you risk locking down the
    * PHP process.
    */
-  public function PDOPrepare($query, array $options = array()) {
+  public function PDOPrepare($query, array $options = []) {
 
     // Preprocess the query.
     if (!$this->bypassQueryPreprocess) {
@@ -280,14 +258,14 @@ class Connection extends DatabaseConnection {
       $trace = array_splice($trace, 1);
       $comment = PHP_EOL . PHP_EOL;
       $comment .= '-- uid:' . (empty($user) ? 'null' : $user->uid) . PHP_EOL;
-      $uri = (isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : 'none') ;
+      $uri = (isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : 'none');
       $uri = preg_replace("/[^a-zA-Z0-9]/i", "_", $uri);
       $comment .= '-- url:' . $uri . PHP_EOL;
       //$comment .= '-- request_id:' . $request_id . PHP_EOL;
       foreach ($trace as $t) {
         $function = isset($t['function']) ? $t['function'] : '';
         $file = '';
-        if(isset($t['file'])) {
+        if (isset($t['file'])) {
           $len = strlen($t['file']);
           if ($len > $trim) {
             $file = substr($t['file'], $trim, $len - $trim) . " [{$t['line']}]";
@@ -337,7 +315,8 @@ class Connection extends DatabaseConnection {
    * This method gets called between 3,000 and 10,000 times
    * on cold caches. Make sure it is simple and fast.
    *
-   * @param mixed $matches 
+   * @param mixed $matches
+   *
    * @return mixed
    */
   protected function replaceReservedCallback($matches) {
@@ -352,48 +331,48 @@ class Connection extends DatabaseConnection {
   }
 
   public function quoteIdentifier($identifier) {
-    return '[' . $identifier .']';
+    return '[' . $identifier . ']';
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function escapeField($field) {
     if ($cache = fastcache::cache_get($field, 'schema_escapeField')) {
       return $cache->data;
     }
     if (strlen($field) > 0) {
-      $result = implode('.', array_map(array($this, 'quoteIdentifier'), explode('.', preg_replace('/[^A-Za-z0-9_.]+/', '', $field))));
+      $result = implode('.', array_map([
+        $this,
+        'quoteIdentifier',
+      ], explode('.', preg_replace('/[^A-Za-z0-9_. ]+/', '', $field))));
     }
     else {
       $result = '';
     }
     fastcache::cache_set($field, $result, 'schema_escapeField');
-    if (strlen($field) > 0) {
-      $result = implode('.', array_map(array($this, 'quoteIdentifier'), explode('.', preg_replace('/[^A-Za-z0-9_. ]+/', '', $field))));
-    }
-    else {
-      $result = '';
-    }
     return $result;
   }
 
   public function quoteIdentifiers($identifiers) {
-    return array_map(array($this, 'quoteIdentifier'), $identifiers);
+    return array_map([$this, 'quoteIdentifier'], $identifiers);
   }
 
   /**
-   * Override of DatabaseConnection::escapeLike().
+   * {@inheritdoc}
    */
   public function escapeLike($string) {
     return addcslashes($string, '\%_[]');
   }
 
   /**
-   * Override of DatabaseConnection::queryRange().
+   * {@inheritdoc}
    */
-  public function queryRange($query, $from, $count, array $args = array(), array $options = array()) {
+  public function queryRange($query, $from, $count, array $args = [], array $options = []) {
     $query = $this->addRangeToQuery($query, $from, $count);
     return $this->query($query, $args, $options);
   }
-  
+
   /**
    * Generates a temporary table name. Because we are using
    * global temporary tables, these are visible between
@@ -406,17 +385,17 @@ class Connection extends DatabaseConnection {
   protected function generateTemporaryTableName() {
     static $temp_key;
     if (!isset($temp_key)) {
-      $temp_key = strtoupper(md5(uniqid(rand(), true)));
+      $temp_key = strtoupper(md5(uniqid(rand(), TRUE)));
     }
     return "db_temp_" . $this->temporaryNameIndex++ . '_' . $temp_key;
   }
-  
+
   /**
-   * Override of DatabaseConnection::queryTemporary().
+   * {@inheritdoc}
    *
    * @status tested
    */
-  public function queryTemporary($query, array $args = array(), array $options = array()) {
+  public function queryTemporary($query, array $args = [], array $options = []) {
     // Generate a new GLOBAL temporary table name and protect it from prefixing.
     // SQL Server requires that temporary tables to be non-qualified.
     $tablename = '##' . $this->generateTemporaryTableName();
@@ -427,25 +406,24 @@ class Connection extends DatabaseConnection {
     $prefixes = $this->prefixes;
     $prefixes[$tablename] = '';
     $this->setPrefix($prefixes);
-    
+
     // Having comments in the query can be tricky and break the SELECT FROM  -> SELECT INTO conversion
     $query = $this->schema()->removeSQLComments($query);
-    
+
     // Replace SELECT xxx FROM table by SELECT xxx INTO #table FROM table.
     $query = preg_replace('/^SELECT(.*?)FROM/is', 'SELECT$1 INTO ' . $tablename . ' FROM', $query);
     $this->query($query, $args, $options);
-    
+
     return $tablename;
   }
 
-  
   /**
    * {@inheritdoc}
    *
    * This method is overriden to manage the insecure (EMULATE_PREPARE)
    * behaviour to prevent some compatibility issues with SQL Server.
    */
-  public function query($query, array $args = array(), $options = array()) {
+  public function query($query, array $args = [], $options = []) {
 
     // Use default values if not already set.
     $options += $this->defaultOptions();
@@ -469,7 +447,7 @@ class Connection extends DatabaseConnection {
         if ($insecure === TRUE || $argcount >= 2100 || ($argcount != substr_count($query, ':'))) {
           $insecure = TRUE;
         }
-        $stmt = $this->prepareQuery($query, array('insecure' => $insecure));
+        $stmt = $this->prepareQuery($query, ['insecure' => $insecure]);
         $stmt->execute($args, $options);
       }
 
@@ -522,13 +500,14 @@ class Connection extends DatabaseConnection {
    * The caller is sure that his query is MS SQL compatible! Used internally
    * from the schema class, but could be called from anywhere.
    *
-   * @param mixed $query 
-   * @param array $args 
-   * @param mixed $options 
-   * @throws PDOException 
+   * @param mixed $query
+   * @param array $args
+   * @param mixed $options
+   *
+   * @throws \PDOException
    * @return mixed
    */
-  public function query_direct($query, array $args = array(), $options = array()) {
+  public function query_direct($query, array $args = [], $options = []) {
 
     // Use default values if not already set.
     $options += $this->defaultOptions();
@@ -537,11 +516,11 @@ class Connection extends DatabaseConnection {
     try {
 
       // Bypass query preprocessing and use direct queries.
-      $ctx = new DatabaseContext($this, TRUE, TRUE);
+      $ctx = new Context($this, TRUE, TRUE);
 
       $stmt = $this->prepareQuery($query, $options);
       $stmt->execute($args, $options);
-      
+
       // Reset the context settings.
       unset($ctx);
 
@@ -595,30 +574,33 @@ class Connection extends DatabaseConnection {
   public function preprocessQuery($query) {
     // Force quotes around some SQL Server reserved keywords.
     if (preg_match('/^SELECT/i', $query)) {
-      $query = preg_replace_callback(self::RESERVED_REGEXP, array($this, 'replaceReservedCallback'), $query);
+      $query = preg_replace_callback(self::RESERVED_REGEXP, [
+        $this,
+        'replaceReservedCallback',
+      ], $query);
     }
 
     // Last chance to modify some SQL Server-specific syntax.
-    $replacements = array();
+    $replacements = [];
 
     // Add prefixes to Drupal-specific functions.
     $defaultSchema = $this->schema()->GetDefaultSchema();
     foreach ($this->schema()->DrupalSpecificFunctions() as $function) {
-      $replacements['/\b(?<![:.])(' . preg_quote($function) . ')\(/i'] =  "{$defaultSchema}.$1(";
+      $replacements['/\b(?<![:.])(' . preg_quote($function) . ')\(/i'] = "{$defaultSchema}.$1(";
     }
 
     // Rename some functions.
-    $funcs = array(
+    $funcs = [
       'LENGTH' => 'LEN',
       'POW' => 'POWER',
-    );
+    ];
 
     foreach ($funcs as $function => $replacement) {
-      $replacements['/\b(?<![:.])(' . preg_quote($function) . ')\(/i'] = $replacement . '('; 
+      $replacements['/\b(?<![:.])(' . preg_quote($function) . ')\(/i'] = $replacement . '(';
     }
 
     // Replace the ANSI concatenation operator with SQL Server poor one.
-    $replacements['/\|\|/'] =  '+';
+    $replacements['/\|\|/'] = '+';
 
     // Now do all the replacements at once.
     $query = preg_replace(array_keys($replacements), array_values($replacements), $query);
@@ -661,20 +643,23 @@ class Connection extends DatabaseConnection {
     return $query;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function mapConditionOperator($operator) {
     // SQL Server doesn't need special escaping for the \ character in a string
     // literal, because it uses '' to escape the single quote, not \'. Sadly
     // PDO doesn't know that and interpret \' as an escaping character. We
     // use a function call here to be safe.
-    static $specials = array(
-    'LIKE' => array('postfix' => " ESCAPE CHAR(92)"),
-    'NOT LIKE' => array('postfix' => " ESCAPE CHAR(92)"),
-    );
+    static $specials = [
+      'LIKE' => ['postfix' => " ESCAPE CHAR(92)"],
+      'NOT LIKE' => ['postfix' => " ESCAPE CHAR(92)"],
+    ];
     return isset($specials[$operator]) ? $specials[$operator] : NULL;
   }
 
   /**
-   * Override of DatabaseConnection::nextId().
+   * {@inheritdoc}
    *
    * @status tested
    */
@@ -682,37 +667,38 @@ class Connection extends DatabaseConnection {
     // If an exiting value is passed, for its insertion into the sequence table.
     if ($existing > 0) {
       try {
-        $this->query_direct('SET IDENTITY_INSERT {sequences} ON; INSERT INTO {sequences} (value) VALUES(:existing); SET IDENTITY_INSERT {sequences} OFF', array(':existing' => $existing));
+        $this->query_direct('SET IDENTITY_INSERT {sequences} ON; INSERT INTO {sequences} (value) VALUES(:existing); SET IDENTITY_INSERT {sequences} OFF', [':existing' => $existing]);
       }
-      catch (Exception $e) {
+      catch (\Exception $e) {
         // Doesn't matter if this fails, it just means that this value is already
         // present in the table.
       }
     }
 
     // Refactored to use OUTPUT because under high concurrency LAST_INSERTED_ID does not work properly.
-    return $this->query_direct('INSERT INTO {sequences} OUTPUT (Inserted.[value]) DEFAULT VALUES')->fetchField();
+    return $this->query_direct('INSERT INTO {sequences} OUTPUT (Inserted.[value]) DEFAULT VALUES')
+      ->fetchField();
   }
 
   /**
-   * Override DatabaseConnection::escapeTable().
+   * {@inheritdoc}
    *
    * @status needswork
    */
   public function escapeTable($table) {
     // A static cache is better suited for this.
-    static $tables = array();
+    static $tables = [];
     if (isset($tables[$table])) {
       return $tables[$table];
     }
-    
+
     // Rescue the # prefix from the escaping.
     $is_temporary = $table[0] == '#';
     $is_temporary_global = $is_temporary && isset($table[1]) && $table[1] == '#';
-    
+
     // Any temporary table prefix will be removed.
     $result = preg_replace('/[^A-Za-z0-9_.]+/', '', $table);
-    
+
     // Restore the temporary prefix.
     if ($is_temporary) {
       if ($is_temporary_global) {
@@ -722,38 +708,38 @@ class Connection extends DatabaseConnection {
         $result = '#' . $result;
       }
     }
-    
+
     $tables[$table] = $result;
 
     return $result;
   }
-  
+
   #region Transactions
 
   /**
-   * Overriden to allow transaction settings.
+   * {@inheritdoc}
    */
-  public function startTransaction($name = '', DatabaseTransactionSettings $settings = NULL) {
+  public function startTransaction($name = '', TransactionSettings $settings = NULL) {
     if ($settings == NULL) {
-      $settings = DatabaseTransactionSettings::GetDefaults();
+      $settings = TransactionSettings::GetDefaults();
     }
     return new Transaction($this, $name, $settings);
   }
 
   /**
-   * Overriden.
+   * {@inheritdoc}
    */
   public function rollback($savepoint_name = 'drupal_transaction') {
     if (!$this->supportsTransactions()) {
       return;
     }
     if (!$this->inTransaction()) {
-      throw new DatabaseTransactionNoActiveException();
+      throw new TransactionNoActiveException();
     }
     // A previous rollback to an earlier savepoint may mean that the savepoint
     // in question has already been accidentally committed.
     if (!isset($this->transactionLayers[$savepoint_name])) {
-      throw new DatabaseTransactionNoActiveException();
+      throw new TransactionNoActiveException();
     }
 
     // We need to find the point we're rolling back to, all other savepoints
@@ -773,7 +759,7 @@ class Connection extends DatabaseConnection {
         }
         $this->popCommittableTransactions();
         if ($rolled_back_other_active_savepoints) {
-          throw new DatabaseTransactionOutOfOrderException();
+          throw new TransactionOutOfOrderException();
         }
         return;
       }
@@ -784,33 +770,33 @@ class Connection extends DatabaseConnection {
     $this->connection->rollBack();
     // Restore original transaction isolation level
     if ($level = static::DefaultTransactionIsolationLevelInStatement()) {
-      if($savepoint['settings']->Get_IsolationLevel() != DatabaseTransactionIsolationLevel::Ignore()) { 
+      if ($savepoint['settings']->Get_IsolationLevel() != TransactionIsolationLevel::Ignore) {
         if ($level != $savepoint['settings']->Get_IsolationLevel()) {
           $this->query_direct("SET TRANSACTION ISOLATION LEVEL {$level}");
         }
       }
     }
     if ($rolled_back_other_active_savepoints) {
-      throw new DatabaseTransactionOutOfOrderException();
+      throw new TransactionOutOfOrderException();
     }
   }
 
   /**
-   * Summary of pushTransaction
-   * @param string $name 
-   * @param DatabaseTransactionSettings $settings 
-   * @throws DatabaseTransactionNameNonUniqueException 
-   * @return void
+   * {@inheritdoc}
+   *
+   * @param \Drupal\dblib\Driver\TransactionSettings $settings
+   *
+   * @throws \Drupal\Core\Database\TransactionNameNonUniqueException
    */
   public function pushTransaction($name, $settings = NULL) {
     if ($settings == NULL) {
-      $settings = DatabaseTransactionSettings::GetBetterDefaults();
+      $settings = TransactionSettings::GetBetterDefaults();
     }
     if (!$this->supportsTransactions()) {
       return;
     }
     if (isset($this->transactionLayers[$name])) {
-      throw new DatabaseTransactionNameNonUniqueException($name . " is already in use.");
+      throw new TransactionNameNonUniqueException($name . " is already in use.");
     }
     $started = FALSE;
     // If we're already in a transaction.
@@ -819,22 +805,23 @@ class Connection extends DatabaseConnection {
     // transaction must be started.
     if ($this->inTransaction()) {
       switch ($settings->Get_ScopeOption()) {
-        case DatabaseTransactionScopeOption::RequiresNew():
+        case TransactionScopeOption::RequiresNew:
           $this->query_direct('SAVE TRANSACTION ' . $name);
           $started = TRUE;
           break;
-        case DatabaseTransactionScopeOption::Required():
+        case TransactionScopeOption::Required:
           // We are already in a transaction, do nothing.
           break;
-        case DatabaseTransactionScopeOption::Supress():
-          // The only way to supress the ambient transaction is to use a new connection
+        case TransactionScopeOption::Suppress:
+          // The only way to suppress the ambient transaction is to use a new connection
           // during the scope of this transaction, a bit messy to implement.
-          throw new Exception('DatabaseTransactionScopeOption::Supress not implemented.');
+          throw new \Exception('TransactionScopeOption::Suppress not implemented.');
       }
     }
     else {
-      if ($settings->Get_IsolationLevel() != DatabaseTransactionIsolationLevel::Ignore()) {
-        $current_isolation_level = strtoupper($this->schema()->UserOptions()['isolation level']);
+      if ($settings->Get_IsolationLevel() != TransactionIsolationLevel::Ignore) {
+        $current_isolation_level = strtoupper($this->schema()
+          ->UserOptions()['isolation level']);
         // Se what isolation level was requested.
         $level = $settings->Get_IsolationLevel()->__toString();
         if (strcasecmp($current_isolation_level, $level) !== 0) {
@@ -843,29 +830,22 @@ class Connection extends DatabaseConnection {
       }
       // In order to start a transaction current statement cursors
       // must be closed.
-      foreach($this->statement_cache as $statement) {
+      foreach ($this->statement_cache as $statement) {
         $statement->closeCursor();
       }
       $this->connection->beginTransaction();
     }
     // Store the name and settings in the stack.
-    $this->transactionLayers[$name] = array('settings' => $settings, 'active' => TRUE, 'name' => $name, 'started' => $started);
+    $this->transactionLayers[$name] = [
+      'settings' => $settings,
+      'active' => TRUE,
+      'name' => $name,
+      'started' => $started,
+    ];
   }
 
   /**
-   * Decreases the depth of transaction nesting.
-   *
-   * If we pop off the last transaction layer, then we either commit or roll
-   * back the transaction as necessary. If no transaction is active, we return
-   * because the transaction may have manually been rolled back.
-   *
-   * @param $name
-   *   The name of the savepoint
-   *
-   * @throws DatabaseTransactionNoActiveException
-   * @throws DatabaseTransactionCommitFailedException
-   *
-   * @see DatabaseTransaction
+   * {@inheritdoc}
    */
   public function popTransaction($name) {
     if (!$this->supportsTransactions()) {
@@ -885,7 +865,7 @@ class Connection extends DatabaseConnection {
   }
 
   /**
-   * Internal function: commit all the transaction layers that can commit.
+   * {@inheritdoc}
    */
   protected function popCommittableTransactions() {
     // Commit all the committable layers.
@@ -898,16 +878,18 @@ class Connection extends DatabaseConnection {
       unset($this->transactionLayers[$name]);
       if (empty($this->transactionLayers)) {
         try {
-          // PDO::commit() can either return FALSE or throw an exception itself
+          // \PDO::commit() can either return FALSE or throw an exception itself
           if (!$this->connection->commit()) {
-            throw new DatabaseTransactionCommitFailedException();
+            throw new TransactionCommitFailedException();
           }
         }
         finally {
           // Restore original transaction isolation level
-          if ($level = static::DefaultTransactionIsolationLevelInStatement()) { 
-            if($state['settings']->Get_IsolationLevel() != DatabaseTransactionIsolationLevel::Ignore()) { 
-              if ($level != $state['settings']->Get_IsolationLevel()->__toString()) {
+          if ($level = static::DefaultTransactionIsolationLevelInStatement()) {
+            if ($state['settings']->Get_IsolationLevel() != TransactionIsolationLevel::Ignore) {
+              if ($level != $state['settings']->Get_IsolationLevel()
+                  ->__toString()
+              ) {
                 $this->query_direct("SET TRANSACTION ISOLATION LEVEL {$level}");
               }
             }
@@ -920,15 +902,8 @@ class Connection extends DatabaseConnection {
     }
   }
 
-  #endregion
-
   /**
-   * Overrides \Drupal\Core\Database\Connection::createDatabase().
-   *
-   * @param string $database
-   *   The name of the database to create.
-   *
-   * @throws \Drupal\Core\Database\DatabaseNotFoundException
+   * {@inheritdoc}
    */
   public function createDatabase($database) {
     // Escape the database name.
@@ -946,11 +921,11 @@ class Connection extends DatabaseConnection {
   /**
    * {@inheritdoc}
    */
-  public function upsert($table, array $options = array()) {
+  public function upsert($table, array $options = []) {
     $class = $this->getDriverClass('UpsertNative');
-    //$class = $this->getDriverClass('Upsert');
     return new $class($this, $table, $options);
   }
+
 }
 
 /**

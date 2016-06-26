@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\dblib\Driver\TransactionIsolationLevel.
- */
-
 namespace Drupal\dblib\Driver;
 
 /**

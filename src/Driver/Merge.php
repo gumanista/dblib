@@ -1,26 +1,14 @@
 <?php
 
-/**
- * @file
- * Contains \Drupal\dblib\Driver\Merge.
- */
-
 namespace Drupal\dblib\Driver;
 
+use Drupal\Core\Database\Query\InvalidMergeQueryException;
 use Drupal\Core\Database\Query\Merge as QueryMerge;
-
 use Drupal\dblib\Driver\Utils as DatabaseUtils;
 
-use Drupal\dblib\Driver\TransactionIsolationLevel as DatabaseTransactionIsolationLevel;
-use Drupal\dblib\Driver\TransactionScopeOption as DatabaseTransactionScopeOption;
-use Drupal\dblib\Driver\TransactionSettings as DatabaseTransactionSettings;
-
-use Drupal\Core\Database\Query\InvalidMergeQueryException;
-
-use PDO as PDO;
-use Exception as Exception;
-use PDOStatement as PDOStatement;
-
+/**
+ * MSSQL implementation of \Drupal\Core\Database\Query\Merge.
+ */
 class Merge extends QueryMerge {
 
   /**
