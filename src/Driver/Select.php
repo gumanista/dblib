@@ -13,6 +13,7 @@ use Drupal\Core\Database\Query\PlaceholderInterface as DatabasePlaceholderInterf
 use Drupal\Core\Database\Query\SelectInterface as DatabaseSelectInterface;
 use Drupal\Core\Database\Query\Select as QuerySelect;
 use Drupal\Core\Database\Query\Condition as DatabaseCondition;
+use Drupal\Core\Database\Query\SelectInterface;
 
 /**
  * @addtogroup database
@@ -231,7 +232,7 @@ class Select extends QuerySelect {
       }
 
       // If the table is a subquery, compile it and integrate it into this query.
-      if ($table['table'] instanceof SelectQueryInterface) {
+      if ($table['table'] instanceof SelectInterface) {
         // Run preparation steps on this sub-query before converting to string.
         $subquery = $table['table'];
         $subquery->preExecute();
